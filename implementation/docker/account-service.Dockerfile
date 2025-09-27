@@ -1,8 +1,11 @@
 # Build stage using maven image
 FROM maven:3.8.7-eclipse-temurin-17 AS build
 WORKDIR /app
-COPY sample-services/account-service/pom.xml .
-COPY sample-services/account-service/src ./src
+
+# Copy only files that exist inside sample-services/account-service
+COPY pom.xml .
+COPY src ./src
+
 RUN mvn -B -DskipTests clean package
 
 # Runtime stage

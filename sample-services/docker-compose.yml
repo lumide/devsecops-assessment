@@ -11,8 +11,8 @@ services:
 
   account-service:
     build:
-      context: .
-      dockerfile: ../implementation/docker/account-service.Dockerfile
+      context: ../sample-services/account-service
+      dockerfile: ../../implementation/docker/account-service.Dockerfile
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -26,8 +26,8 @@ services:
 
   payment-service:
     build:
-      context: .
-      dockerfile: ../implementation/docker/payment-service.Dockerfile
+      context: ../sample-services/payment-service
+      dockerfile: ../../implementation/docker/payment-service.Dockerfile
     environment:
       ACCOUNT_SERVICE_URL: "http://account-service:8081"
     depends_on:
@@ -37,8 +37,8 @@ services:
 
   transaction-service:
     build:
-      context: .
-      dockerfile: ../implementation/docker/transaction-service.Dockerfile
+      context: ../sample-services/transaction-service
+      dockerfile: ../../implementation/docker/transaction-service.Dockerfile
     depends_on:
       - account-service
     ports:

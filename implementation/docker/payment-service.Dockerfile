@@ -1,12 +1,19 @@
+# Build stage using maven image
 FROM maven:3.8.7-eclipse-temurin-17 AS build
 WORKDIR /app
-COPY sample-services/payment-service/pom.xml .
-COPY sample-services/payment-service/src ./src
+
+# Copy only files that exist inside sample-services/account-service
+COPY pom.xml .
+COPY src ./src
+
 RUN mvn -B -DskipTests clean package
 
+# Runtime stage
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 COPY --from=build /app/target/*.jar ./app.jar
+
+# non-root user
 RUN addgroup --system spring && adduser --system --ingroup spring spring
 USER spring:spring
 
