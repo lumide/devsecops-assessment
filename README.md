@@ -1,4 +1,4 @@
-# DevSecOps Assessment - [Your Name]
+# DevSecOps Assessment - [Olumide Olowe]
 
 ## Overview
 This repo contains design, docs and implementation for the Senior DevSecOps assessment.
