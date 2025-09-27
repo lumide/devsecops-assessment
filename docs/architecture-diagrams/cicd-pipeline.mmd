@@ -1,21 +1,48 @@
+---
+config:
+  theme: base
+  look: classic
+---
 flowchart TD
-  A["Developer pushes commit"] --> B(GitHub Actions CI) 
-  B -->C{Pipeline Using Feature Branch: Parallel Runs} 
-  B -->D{Pipeline Using Feature Branch}
-  C -->E["Build & Unit Tests (Maven)"]  --> J[PR is created to master ]
-  C -->F["Static Analysis: SonarQube"]  --> J[PR is created to master ]
-  C -->G["Docker Build Image and Trivy image Scan Check"] --> J[PR is created to master ]
-  D -->H["Integration Test (Postman/API)"] --> J[PR is created to master ]
-  D -->I["Performance Test(Jmeter)"] --> J[PR is created to master ]
-  J --> K(GitHub Actions CI) 
-  K -->L{Pipeline Using Master Branch: Parallel Runs}
-  K -->M{Pipeline Using Master Branch}
-  M -->N["Flyway DB migration"]
-  L -->O[Docker Build & Push -> Registry]
-  O -->P[Image Scan: Trivy + cosign verify]
-  P -->Q[Deploy to Staging via Helm / ArgoCD]
-  Q -->R[Manual approval or automated canary]
-  R -->S[Deploy to UAT via ArgoCD]
-  S -->T[Deploy to Prod via ArgoCD + Canary/Argo Rollouts]
-  T -->U[Post-deploy validation & Monitoring]
-  U -->V[Audit logs written to audit-service & central log store]
+    A[Developer: Commit to Feature Branch] --> B[GitHub Actions: CI Pipeline]
+    B --> C1[Build & Unit Tests - Maven]
+    B --> C2[Static Analysis - SonarQube]
+    B --> C3[SAST - Veracode]
+    B --> C4[Secrets Scan - Gitleaks/Trivy FS]
+    C1 & C2 & C3 & C4 --> D{All Checks Pass?}
+    D -- Yes --> E[Ready for PR]
+    D -- No --> F[Fail Fast - Notify Developer]
+    F --> A
+    G[PR Created to Main] --> H[GitHub Actions: PR Pipeline]
+    H --> I[Build & Unit Tests - Maven]
+    H --> J[SCA - Snyk]
+    I & J --> K{Dependency/Test Fail?}
+    K -- Yes --> L[PR Blocked - Fix Required]
+    K -- No --> M[Docker Build & Push -> ECR]
+    M --> N[Image Scan - Trivy + Cosign Sign]
+    N --> O[Integration Tests - Testcontainers]
+    O --> P[Deploy to Dev via ArgoCD]
+    P --> Q[Automated Smoke Tests]
+    Q --> R{Smoke Tests Pass?}
+    R -- No --> S[Auto-Rollback - Notify Team]
+    R -- Yes --> T[PR Merge Enabled]
+    U[Merge to Main] --> V[GitHub Actions: CD Pipeline]
+    V --> W[Deploy to UAT via ArgoCD]
+    W --> X[Manual UAT Validation]
+    X --> Y[Smoke & Contract Tests]
+    Y --> Z{Manual Approval for Prod?}
+    Z -- No --> AA[Deploy Halted]
+    Z -- Yes --> AB[Deploy to Prod via ArgoCD Rollouts]
+    AB --> AC[Canary/Blue-Green Deployment]
+    AC --> AD[Post-Deploy Validation]
+    AD --> AE[Metrics & Traces Collected]
+    AE --> AF[Audit Logs to Central Store]
+    AF --> AG[Deployment Success]
+    classDef featureBranch fill:#000
+    classDef prPipeline fill:#000
+    classDef cdPipeline fill:#000
+    classDef production fill:#000
+    class A,B,C1,C2,C3,C4,D,E,F featureBranch
+    class G,H,I,J,K,L,M,N,O,P,Q,R,S,T prPipeline
+    class U,V,W,X,Y,Z,AA,AB,AC,AD,AE,AF,AG cdPipeline
+    class AB,AC,AD,AE,AF,AG production

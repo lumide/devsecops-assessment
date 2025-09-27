@@ -1,28 +1,90 @@
 ---
 config:
-  theme: neutral
+  theme: base
+  look: classic
 ---
-graph TD
-  subgraph AWS
-    VPC[VPC]
-    ALB[ALB/Ingress]
-    EKS[EKS Cluster - multi-AZ]
-    RDS[RDS Postgres - Multi-AZ]
-    ElastiCache[Redis Cluster]
-    ECR[ECR / Container Registry]
-    Secrets[AWS Secrets Manager / Vault]
-  end
-  subgraph Observability
-    PROM[Prometheus]
-    GRAF[Grafana]
-    OPENSEARCH[OpenSearch]
-    JAEGER[Jaeger]
-  end
-  ALB --> EKS
-  EKS --> RDS
-  EKS --> ElastiCache
-  EKS --> PROM
-  EKS --> OPENSEARCH
-  EKS --> JAEGER
-  ECR --> EKS
-  Secrets --> EKS
+flowchart TD
+    subgraph IaC_Orchestration[Terraform Workspace & Helm Environment Management]
+        Tf_Dev[Terraform: Dev Workspace]
+        Tf_UAT[Terraform: UAT Workspace]
+        Tf_Prod[Terraform: Prod Workspace]
+        
+        Helm_Dev[Helm Values: dev.yaml]
+        Helm_UAT[Helm Values: uat.yaml]
+        Helm_Prod[Helm Values: prod.yaml]
+    end
+
+    subgraph AWS_Dev[Development Environment]
+        VPC_Dev[VPC - Dev]
+        EKS_Dev[EKS Cluster - Dev]
+        RDS_Dev[RDS Postgres - Single AZ]
+        Redis_Dev[ElastiCache - Dev]
+        ALB_Dev[ALB - Dev]
+    end
+
+    subgraph AWS_UAT[UAT Environment]
+        VPC_UAT[VPC - UAT]
+        EKS_UAT[EKS Cluster - UAT]
+        RDS_UAT[RDS Postgres - Multi-AZ]
+        Redis_UAT[ElastiCache - UAT]
+        ALB_UAT[ALB - UAT]
+    end
+
+    subgraph AWS_Prod["Production Environment (DR Ready)"]
+        VPC_Prod_1[VPC - Prod - us-east-1]
+        VPC_Prod_2[VPC - DR - us-west-2]
+        
+        subgraph Primary_Region[Primary Region]
+            EKS_Prod[EKS Cluster - Multi-AZ]
+            RDS_Prod[RDS Postgres - Multi-AZ Read Replicas]
+            Redis_Prod[ElastiCache - Multi-AZ Cluster]
+            ALB_Prod[ALB - Global Accelerator]
+        end
+        
+        subgraph DR_Region[Disaster Recovery Region]
+            EKS_DR[EKS Cluster - DR]
+            RDS_DR[RDS Read Replica - Async]
+            Redis_DR[ElastiCache - Backup]
+        end
+    end
+
+    %% Infrastructure Provisioning Flow
+    Tf_Dev --> AWS_Dev
+    Tf_UAT --> AWS_UAT
+    Tf_Prod --> AWS_Prod
+    
+    Helm_Dev --> EKS_Dev
+    Helm_UAT --> EKS_UAT
+    Helm_Prod --> EKS_Prod
+    
+    %% Environment Parity Configuration
+    Base_Config[Terraform Modules] --> Tf_Dev
+    Base_Config --> Tf_UAT
+    Base_Config --> Tf_Prod
+    
+    %% Secrets Management
+    subgraph Secrets_Management[Centralized Secrets Management]
+        Vault_Primary[HashiCorp Vault Primary]
+        Vault_Secondary[HashiCorp Vault DR]
+    end
+    
+    Secrets_Management --> EKS_Dev
+    Secrets_Management --> EKS_UAT
+    Secrets_Management --> EKS_Prod
+    Secrets_Management --> EKS_DR
+    
+    %% Database Migration & Configuration
+    Flyway[Flyway DB Migrations] --> RDS_Dev
+    Flyway --> RDS_UAT
+    Flyway --> RDS_Prod
+    
+    %% Auto-scaling Configuration
+    subgraph AutoScaling[Auto-scaling Policies]
+        HPA_Dev[K8s HPA - Dev]
+        HPA_UAT[K8s HPA - UAT]
+        HPA_Prod[K8s HPA + Cluster Autoscaler - Prod]
+    end
+    
+    HPA_Dev --> EKS_Dev
+    HPA_UAT --> EKS_UAT
+    HPA_Prod --> EKS_Prod

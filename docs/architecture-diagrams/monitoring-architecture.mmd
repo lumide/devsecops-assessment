@@ -1,13 +1,84 @@
 ---
 config:
-  theme: neutral
+  theme: base
+  look: classic
 ---
-flowchart TD
-  Apps[K8s Apps] -->|metrics| Prometheus
-  Apps -->|logs| FluentBit
-  FluentBit --> OpenSearch
-  Apps -->|traces| OpenTelemetry_Collector
-  OpenTelemetry_Collector --> Jaeger
-  Prometheus --> Grafana
-  Prometheus --> Alertmanager --> PagerDuty_Slack
-  OpenSearch --> Kibana_Grafana
+flowchart LR
+    subgraph Applications[Kubernetes Applications]
+        Apps_Dev[Dev Environment Apps]
+        Apps_UAT[UAT Environment Apps]
+        Apps_Prod[Production Environment Apps]
+    end
+
+    subgraph Data_Collection[Observability Data Collection]
+        %% Metrics Flow
+        Apps_Dev -->|metrics| Prometheus_Dev
+        Apps_UAT -->|metrics| Prometheus_UAT
+        Apps_Prod -->|metrics| Prometheus_Prod
+        
+        %% Logs Flow
+        Apps_Dev -->|logs| FluentBit_Dev
+        Apps_UAT -->|logs| FluentBit_UAT
+        Apps_Prod -->|logs| FluentBit_Prod
+        
+        %% Traces Flow
+        Apps_Dev -->|traces| OTEL_Dev[OTEL Collector]
+        Apps_UAT -->|traces| OTEL_UAT[OTEL Collector]
+        Apps_Prod -->|traces| OTEL_Prod[OTEL Collector]
+    end
+
+    subgraph Central_Platform[Central Observability Platform]
+        Prometheus_Central[Prometheus - Central]
+        Thanos[Thanos Query]
+        Alertmanager[Alertmanager]
+        
+        OpenSearch[OpenSearch Cluster]
+        Kibana[Kibana]
+        
+        Jaeger[Jaeger]
+        Grafana[Grafana - Unified Dashboards]
+    end
+
+    subgraph Alerting_Destinations[Alert Destinations]
+        Slack_Dev[Slack - Dev Alerts]
+        Slack_Prod[Slack - Prod Alerts]
+        PagerDuty[PagerDuty - Critical]
+    end
+
+    %% Data Aggregation to Central Platform
+    Prometheus_Dev --> Thanos
+    Prometheus_UAT --> Thanos
+    Prometheus_Prod --> Thanos
+    
+    FluentBit_Dev --> OpenSearch
+    FluentBit_UAT --> OpenSearch
+    FluentBit_Prod --> OpenSearch
+    
+    OTEL_Dev --> Jaeger
+    OTEL_UAT --> Jaeger
+    OTEL_Prod --> Jaeger
+
+    %% Dashboard & Alerting Flow
+    Thanos --> Grafana
+    OpenSearch --> Grafana
+    OpenSearch --> Kibana
+    
+    Prometheus_Central --> Alertmanager
+    Alertmanager --> Slack_Dev
+    Alertmanager --> Slack_Prod
+    Alertmanager --> PagerDuty
+
+    %% Deployment Health Monitoring
+    ArgoCD[ArgoCD] -->|sync status| Prometheus_Central
+    Grafana --> Deployment_Dash[Deployment Health Dashboard]
+    Grafana --> Compliance_Dash[Compliance Dashboard]
+    
+    classDef dev fill:#e3f2fd
+    classDef uat fill:#f3e5f5
+    classDef prod fill:#ffebee
+    classDef platform fill:#e8f5e8
+    
+    class Apps_Dev,Prometheus_Dev,FluentBit_Dev,OTEL_Dev dev
+    class Apps_UAT,Prometheus_UAT,FluentBit_UAT,OTEL_UAT uat
+    class Apps_Prod,Prometheus_Prod,FluentBit_Prod,OTEL_Prod prod
+    class Central_Platform,Alerting_Destinations platform
