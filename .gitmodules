@@ -1,0 +1,12 @@
+[submodule "sample-services/account-service"]
+	path = sample-services/account-service
+	url = https://github.com/dunamis2015/account-service
+	branch = dev
+[submodule "sample-services/payment-service"]
+	path = sample-services/payment-service
+	url = https://github.com/dunamis2015/payment-service
+	branch = dev
+[submodule "sample-services/transaction-service"]
+	path = sample-services/transaction-service
+	url = https://github.com/dunamis2015/transaction-service
+	branch = dev

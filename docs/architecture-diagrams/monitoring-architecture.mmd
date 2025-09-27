@@ -1,0 +1,13 @@
+---
+config:
+  theme: neutral
+---
+flowchart TD
+  Apps[K8s Apps] -->|metrics| Prometheus
+  Apps -->|logs| FluentBit
+  FluentBit --> OpenSearch
+  Apps -->|traces| OpenTelemetry_Collector
+  OpenTelemetry_Collector --> Jaeger
+  Prometheus --> Grafana
+  Prometheus --> Alertmanager --> PagerDuty_Slack
+  OpenSearch --> Kibana_Grafana

@@ -1,0 +1,28 @@
+---
+config:
+  theme: neutral
+---
+graph TD
+  subgraph AWS
+    VPC[VPC]
+    ALB[ALB/Ingress]
+    EKS[EKS Cluster - multi-AZ]
+    RDS[RDS Postgres - Multi-AZ]
+    ElastiCache[Redis Cluster]
+    ECR[ECR / Container Registry]
+    Secrets[AWS Secrets Manager / Vault]
+  end
+  subgraph Observability
+    PROM[Prometheus]
+    GRAF[Grafana]
+    OPENSEARCH[OpenSearch]
+    JAEGER[Jaeger]
+  end
+  ALB --> EKS
+  EKS --> RDS
+  EKS --> ElastiCache
+  EKS --> PROM
+  EKS --> OPENSEARCH
+  EKS --> JAEGER
+  ECR --> EKS
+  Secrets --> EKS

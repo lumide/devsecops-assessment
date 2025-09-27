@@ -1,0 +1,21 @@
+flowchart TD
+  A["Developer pushes commit"] --> B(GitHub Actions CI) 
+  B -->C{Pipeline Using Feature Branch: Parallel Runs} 
+  B -->D{Pipeline Using Feature Branch}
+  C -->E["Build & Unit Tests (Maven)"]  --> J[PR is created to master ]
+  C -->F["Static Analysis: SonarQube"]  --> J[PR is created to master ]
+  C -->G["Docker Build Image and Trivy image Scan Check"] --> J[PR is created to master ]
+  D -->H["Integration Test (Postman/API)"] --> J[PR is created to master ]
+  D -->I["Performance Test(Jmeter)"] --> J[PR is created to master ]
+  J --> K(GitHub Actions CI) 
+  K -->L{Pipeline Using Master Branch: Parallel Runs}
+  K -->M{Pipeline Using Master Branch}
+  M -->N["Flyway DB migration"]
+  L -->O[Docker Build & Push -> Registry]
+  O -->P[Image Scan: Trivy + cosign verify]
+  P -->Q[Deploy to Staging via Helm / ArgoCD]
+  Q -->R[Manual approval or automated canary]
+  R -->S[Deploy to UAT via ArgoCD]
+  S -->T[Deploy to Prod via ArgoCD + Canary/Argo Rollouts]
+  T -->U[Post-deploy validation & Monitoring]
+  U -->V[Audit logs written to audit-service & central log store]
