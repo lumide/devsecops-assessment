@@ -16,32 +16,32 @@ spec:
         app: transaction-service
     spec:
       containers:
-        - name: transaction-service
-          image: <ECR_REPO>/transaction-service:<TAG>
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 8082
-          env:
-            - name: SECRET_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: transaction-secret
-                  key: token
-          livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
-              port: 8082
-            initialDelaySeconds: 30
-            periodSeconds: 15
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: 8082
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          securityContext:
-            runAsNonRoot: true
-            readOnlyRootFilesystem: true
+      - name: transaction-service
+        image: <ECR_REPO>/dev/transaction-service:<TAG>
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8082
+        env:
+        - name: SECRET_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: transaction-secret
+              key: token
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8082
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8082
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        securityContext:
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
 ---
 apiVersion: v1
 kind: Service
@@ -53,5 +53,5 @@ spec:
   selector:
     app: transaction-service
   ports:
-    - port: 8082
-      targetPort: 8082
+  - port: 8082
+    targetPort: 8082

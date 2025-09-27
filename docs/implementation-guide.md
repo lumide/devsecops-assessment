@@ -45,3 +45,44 @@ The platform runs multiple Java Spring Boot microservices. Current deployment fa
 - SRE runbook drills to practice rollback and DR scenario.
 
 
+# Part 2 — Technical Architecture Design
+
+## Overview
+Four environments: **dev → uat → prod → dr**. Use Terraform for infra, ArgoCD for GitOps, GitHub Actions for CI, Vault/ExternalSecrets for secrets, Prometheus/Thanos + Grafana for metrics, OpenSearch for logs, OpenTelemetry + Jaeger for traces.
+
+### CI/CD Pipeline (end-to-end)
+- **Feature branch** → CI pipeline (build, unit tests, SAST, secret-scan).
+- **PR pipeline** → rebuild, SCA, docker build & push (image tags: dev-<sha>, uat-<sha>, prod-<semver>-<sha>), image scan (Trivy), sign (cosign).
+- Auto-deploy to **dev**; push to ArgoCD app pointing at `implementation/k8s/dev`.
+- Merge to `uat` branch → deploy to **uat**, manual validation tests.
+- Merge to `main` → run production pipeline: create RDS snapshot, run DB migration job under controlled runner, ArgoCD canary/blue-green rollout to **prod**. After successful prod rollout, trigger ArgoCD sync for **dr** to ensure infra & images available.
+- **Compliance checkpoints**: Sonar/Snyk quality gates on PR; cosign verification before prod; pipeline posts audit event to `audit-service`.
+
+### Infrastructure as Code
+- **Terraform structure**
+  - `implementation/infrastructure/terraform/modules/*` for vpc/eks/rds/redis
+  - `implementation/infrastructure/terraform/envs/{dev,uat,prod}` for workspace variables
+- **EKS** per env (dev single AZ, uat multi-AZ, prod multi-AZ + DR region)
+- **DB**: RDS Postgres Multi-AZ for uat/prod; dev single-AZ; async replica to DR.
+- **Secrets**: HashiCorp Vault Primary + Secondary. Use Kubernetes ExternalSecrets in clusters to sync Vault secrets into k8s Secrets.
+- **Auto-scaling**: HPA (Micrometer metrics) + cluster-autoscaler for prod.
+
+### Monitoring & Observability
+- **Metrics**: Micrometer → Prometheus per-cluster → central Thanos for long-term storage.
+- **Logs**: FluentBit → OpenSearch central cluster.
+- **Tracing**: OpenTelemetry agents → OTEL Collector → Jaeger (central).
+- **Dashboards**: Grafana unified: deployment health, SLOs, compliance dashboard for audit events.
+- **Realtime deployment health**: ArgoCD sync status scraped into Prometheus; canary analysis alerts trigger automatic rollback.
+
+### Service dependency & deployment coordination
+- Use **ArgoCD App-of-Apps** or Helm umbrella chart for ordering:
+  - Deploy core services first: `account-service`, `audit-service`, then `transaction-service` & `payment-service`.
+- Contract tests (Postman/Newman) run post-deploy for each environment.
+
+### Technology rationale
+- GitHub Actions: native to repo & flexible.
+- ArgoCD: GitOps, declarative rollback+drift detection.
+- Terraform: modules for parity.
+- Vault + ExternalSecrets: remove hardcoded secrets.
+- Trivy + cosign + Snyk + Veracode + SonarQube: layered security.
+

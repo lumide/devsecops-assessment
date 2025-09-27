@@ -1,0 +1,166 @@
+name: CI/CD - payment-service
+
+on:
+  push:
+    branches:
+      - 'feature/*'
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+env:
+  SERVICE: payment-service
+  DOCKERFILE: implementation/docker/payment-service.Dockerfile
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+
+      - name: Run unit tests
+        run: mvn -B -f sample-services/payment-service/pom.xml -DskipTests=false test
+
+      - name: Static analysis (Sonar placeholder)
+        run: echo "Sonar scan would run here"
+
+      - name: SAST (Veracode placeholder)
+        run: echo "Veracode SAST would run here"
+
+      - name: Secrets scan (gitleaks)
+        uses: zricethezav/gitleaks-action@v1
+        with:
+          args: --path=sample-services/payment-service
+
+      - name: Set IMAGE_TAG
+        id: tag
+        run: |
+          SHORT=${GITHUB_SHA::7}
+          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            IMG_TAG="prod-${SHORT}"
+          elif [[ "${GITHUB_REF}" == refs/heads/dev ]]; then
+            IMG_TAG="uat-${SHORT}"
+          elif [[ "${GITHUB_REF}" =~ refs/heads/feature/ ]]; then
+            IMG_TAG="dev-${SHORT}"
+          else
+            IMG_TAG="${SHORT}"
+          fi
+          echo "IMAGE_TAG=${IMG_TAG}" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=${IMG_TAG}"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ secrets.IMAGE_REPO }}/${{ env.SERVICE }}:${{ steps.tag.outputs.IMAGE_TAG }}
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@v1
+        with:
+          image-ref: ${{ secrets.IMAGE_REPO }}/${{ env.SERVICE }}:${{ steps.tag.outputs.IMAGE_TAG }}
+          exit-code: '1'
+
+      - name: Optional cosign sign (requires COSIGN_KEY secret)
+        if: secrets.COSIGN_KEY != ''
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          echo "${{ secrets.COSIGN_KEY }}" > cosign.key
+          cosign sign --key cosign.key ${{ secrets.IMAGE_REPO }}/${{ env.SERVICE }}:${{ steps.tag.outputs.IMAGE_TAG }}
+
+  deploy-dev:
+    needs: build-and-scan
+    if: startsWith(github.ref, 'refs/heads/feature/') || github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ArgoCD sync (dev)
+        env:
+          ARGOCD_URL: ${{ secrets.ARGOCD_URL }}
+          ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+        run: |
+          APP="${{ env.SERVICE }}-dev"
+          curl -s -X POST -H "Authorization: Bearer $ARGOCD_TOKEN" ${ARGOCD_URL}/api/v1/applications/${APP}/sync -H "Content-Type: application/json"
+
+      - name: Run Dev smoke tests
+        run: ./implementation/ci-cd/scripts/smoke-test.sh dev
+
+  deploy-uat:
+    needs: build-and-scan
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ArgoCD sync (uat)
+        env:
+          ARGOCD_URL: ${{ secrets.ARGOCD_URL }}
+          ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+        run: |
+          APP="${{ env.SERVICE }}-uat"
+          curl -s -X POST -H "Authorization: Bearer $ARGOCD_TOKEN" ${ARGOCD_URL}/api/v1/applications/${APP}/sync -H "Content-Type: application/json"
+      - name: Run UAT smoke & contract tests
+        run: |
+          ./implementation/ci-cd/scripts/smoke-test.sh uat
+          echo "Run contract tests (Postman/Newman) here"
+
+  deploy-prod:
+    needs: build-and-scan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Take RDS snapshot (prod) - placeholder
+        run: echo "Snapshot created (implement with AWS CLI)"
+
+      - name: Run DB migration (prod)
+        env:
+          DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          DB_PORT: ${{ secrets.PROD_DB_PORT }}
+          DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          DB_USER: ${{ secrets.PROD_DB_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+        run: ./implementation/ci-cd/scripts/migrate-db.sh prod
+
+      - name: Trigger ArgoCD sync (prod canary)
+        env:
+          ARGOCD_URL: ${{ secrets.ARGOCD_URL }}
+          ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+        run: |
+          APP="${{ env.SERVICE }}-prod"
+          curl -s -X POST -H "Authorization: Bearer $ARGOCD_TOKEN" ${ARGOCD_URL}/api/v1/applications/${APP}/sync -H "Content-Type: application/json"
+
+      - name: Post-deploy smoke tests
+        run: ./implementation/ci-cd/scripts/smoke-test.sh prod
+
+  deploy-dr:
+    needs: deploy-prod
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync DR app
+        env:
+          ARGOCD_URL: ${{ secrets.ARGOCD_URL }}
+          ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+        run: |
+          APP="${{ env.SERVICE }}-dr"
+          curl -s -X POST -H "Authorization: Bearer $ARGOCD_TOKEN" ${ARGOCD_URL}/api/v1/applications/${APP}/sync -H "Content-Type: application/json"
+      - name: Validate DR
+        run: ./implementation/ci-cd/scripts/smoke-test.sh dr

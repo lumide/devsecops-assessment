@@ -1,11 +1,8 @@
-# implementation/docker/payment-service.Dockerfile
-FROM eclipse-temurin:17-jdk-jammy AS build
+FROM maven:3.8.7-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY sample-services/payment-service/pom.xml .
-COPY sample-services/payment-service/mvnw .
-COPY sample-services/payment-service/.mvn .mvn
-COPY sample-services/payment-service/src src
-RUN ./mvnw -B -DskipTests clean package
+COPY sample-services/payment-service/src ./src
+RUN mvn -B -DskipTests clean package
 
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app

@@ -6,7 +6,7 @@ metadata:
   labels:
     app: payment-service
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: payment-service
@@ -16,34 +16,34 @@ spec:
         app: payment-service
     spec:
       containers:
-        - name: payment-service
-          image: <ECR_REPO>/payment-service:<TAG>
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 8080
-          env:
-            - name: ACCOUNT_SERVICE_URL
-              value: "http://account-service.uat.svc.cluster.local:8081"
-            - name: OTHER_CONFIG
-              valueFrom:
-                configMapKeyRef:
-                  name: payment-config
-                  key: someKey
-          livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
-              port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 15
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          securityContext:
-            runAsNonRoot: true
-            readOnlyRootFilesystem: true
+      - name: payment-service
+        image: <ECR_REPO>/prod/payment-service:<TAG>
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ACCOUNT_SERVICE_URL
+          value: "http://account-service.uat.svc.cluster.local:8081"
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: payment-service-secret
+              key: apiKey
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        securityContext:
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
 ---
 apiVersion: v1
 kind: Service
@@ -55,5 +55,5 @@ spec:
   selector:
     app: payment-service
   ports:
-    - port: 8080
-      targetPort: 8080
+  - port: 8080
+    targetPort: 8080
